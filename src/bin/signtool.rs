@@ -1,19 +1,15 @@
 use std::env;
 use std::fs;
-use std::io::{self, Cursor};
-use std::path::Path;
+use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::process;
-use std::os::unix::io::AsRawFd;
 
 use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private, Public};
 use openssl::rsa::Rsa;
 use openssl::sign::{Signer, Verifier};
 use sha2::{Sha256, Digest};
-use libelf::Elf;
 
 const SIGNATURE_SIZE: usize = 256; // RSA-2048 signature size
-const SIGNATURE_SECTION_NAME: &str = ".signature";
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -122,7 +118,8 @@ fn sign_file(private_key_path: &str, input_file_path: &str, output_file_path: &s
     let input_data = fs::read(input_file_path)?;
     
     if is_elf_file(&input_data) {
-        sign_elf_file(&pkey, input_file_path, output_file_path)
+        // ELF 파일의 경우 간단한 방식으로 서명 처리
+        sign_regular_file(&pkey, &input_data, output_file_path)
     } else {
         sign_regular_file(&pkey, &input_data, output_file_path)
     }
@@ -151,54 +148,6 @@ fn sign_regular_file(pkey: &PKey<Private>, input_data: &[u8], output_file_path: 
     Ok(())
 }
 
-fn sign_elf_file(pkey: &PKey<Private>, input_file_path: &str, output_file_path: &str) -> io::Result<()> {
-    // 입력 파일 복사
-    fs::copy(input_file_path, output_file_path)?;
-    
-    // 입력 파일 내용 읽기
-    let input_data = fs::read(input_file_path)?;
-    
-    // 해시 계산
-    let mut hasher = Sha256::new();
-    hasher.update(&input_data);
-    let hash = hasher.finalize();
-    
-    // 해시에 서명
-    let mut signer = Signer::new(MessageDigest::sha256(), pkey)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    signer.update(&hash)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    let signature = signer.sign_to_vec()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    
-    // ELF 파일에 서명 섹션 추가
-    add_signature_to_elf(output_file_path, &signature)?;
-    
-    Ok(())
-}
-
-fn add_signature_to_elf(file_path: &str, signature: &[u8]) -> io::Result<()> {
-    let file = fs::File::open(file_path)?;
-    let fd = file.as_raw_fd();
-    let mut elf = match Elf::from_fd(&file) {
-        Ok(elf) => elf,
-        Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, format!("ELF 파일 읽기 오류: {:?}", e))),
-    };
-    
-    // 임시 파일에 쓰기
-    let temp_path = format!("{}.tmp", file_path);
-    let mut output_file = fs::File::create(&temp_path)?;
-    
-    // .signature 섹션 추가
-    // 변경된 ELF 파일 저장 - 구현 세부사항은 libelf 라이브러리에 맞게 조정 필요
-    // 여기서는 간단한 구현으로 대체합니다
-    
-    // 임시 파일을 원래 파일로 이동
-    fs::rename(temp_path, file_path)?;
-    
-    Ok(())
-}
-
 fn verify_file(public_key_path: &str, signed_file_path: &str) -> io::Result<bool> {
     // 공개키 로드
     let public_key_data = fs::read(public_key_path)?;
@@ -210,11 +159,7 @@ fn verify_file(public_key_path: &str, signed_file_path: &str) -> io::Result<bool
     // 서명된 파일 읽기
     let signed_data = fs::read(signed_file_path)?;
     
-    if is_elf_file(&signed_data) {
-        verify_elf_file(&pkey, signed_file_path)
-    } else {
-        verify_regular_file(&pkey, &signed_data)
-    }
+    verify_regular_file(&pkey, &signed_data)
 }
 
 fn verify_regular_file(pkey: &PKey<Public>, signed_data: &[u8]) -> io::Result<bool> {
@@ -241,43 +186,4 @@ fn verify_regular_file(pkey: &PKey<Public>, signed_data: &[u8]) -> io::Result<bo
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     
     Ok(result)
-}
-
-fn verify_elf_file(pkey: &PKey<Public>, file_path: &str) -> io::Result<bool> {
-    // 파일 데이터 읽기
-    let file_data = fs::read(file_path)?;
-    
-    // 서명 추출
-    let signature = extract_signature_from_elf(&file_data)?;
-    
-    // 원본 데이터 (서명 제외)
-    let original_data = &file_data[0..file_data.len() - SIGNATURE_SIZE];
-    
-    // 원본 데이터 해시 계산
-    let mut hasher = Sha256::new();
-    hasher.update(original_data);
-    let hash = hasher.finalize();
-    
-    // 서명 검증
-    let mut verifier = Verifier::new(MessageDigest::sha256(), pkey)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    verifier.update(&hash)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    let result = verifier.verify(&signature)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    
-    Ok(result)
-}
-
-fn extract_signature_from_elf(file_data: &[u8]) -> io::Result<Vec<u8>> {
-    let file_cursor = Cursor::new(file_data);
-    let elf = match Elf::from_bytes(file_data) {
-        Ok(elf) => elf,
-        Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, format!("ELF 파일 읽기 오류: {:?}", e))),
-    };
-    
-    // .signature 섹션 찾기 - 간단하게 구현
-    // 실제로는 libelf의 API에 맞게 구현해야 합니다
-    // 예시로 빈 서명을 반환합니다
-    Ok(vec![0; SIGNATURE_SIZE])
 }
