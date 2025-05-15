@@ -10,6 +10,11 @@ name = "signtool"
 [dependencies]
 hex-literal = "0.4"
 sha2 = "0.10"
-openssl-sys = "0.9"
-openssl = "0.10"
-libelf = "0.1.0"
+# openssl 관련 의존성 제거
+# openssl-sys = "0.9"
+# openssl = "0.10"
+# libelf 의존성도 제거
+# libelf = "0.1.0"
+
+[build-dependencies]
+cc = "1.0"

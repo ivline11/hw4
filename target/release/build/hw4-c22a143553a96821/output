@@ -1,0 +1,5 @@
+cargo:rustc-link-search=native=/opt/homebrew/opt/openssl@3/lib
+cargo:rustc-link-lib=static=ssl
+cargo:rustc-link-lib=static=crypto
+cargo:rustc-link-lib=framework=Security
+cargo:rustc-link-lib=framework=CoreFoundation
