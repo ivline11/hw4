@@ -1,0 +1,165 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+**한국어로 답변**
+**명세 제대로 참고할것**
+**Cargo.toml 바꾸지 말것** 
+
+CAS4109 Assignment #4
+Due: May 15th 11:59am
+Code Integrity
+We studied in class the structure of an ELF-format executable file. In this homework assignment, you
+will learn how to cryptographically enforce a “Code Integrity” policy. In particular, you will enforce this
+policy, for a given ELF 64-bit executable file, by signing its executable sections (e.g., .text section).
+Once an executable file has been signed, the integrity of its code sections can be checked by verifying the
+signature before we run the executable; if verification goes successful, we know that the signed sections
+have not been tampered with nor forged after signing.
+To this end, you will write a program in the C/Rust programming language, called signtool , which
+is capable of (i) signing the executable sections of a given executable file, and (ii) verifying the signature.
+Throughout this assignment, you will learn what it means/takes to ensure the integrity of the code that
+natively runs on your CPU. As a side effect, you will get yourself much more used to the structure of
+ELF-format executable files.
+Part A. Signing and Verifying Code Sections
+RSA Key Generation. We will use a pair of RSA public and private keys for this assignment, which
+is not protected with a passphrase. So the RSA key pair, private_key.pem and public_key.pem ,
+will be created as follows.
+$ openssl genrsa -out private_key.pem 2048
+$ openssl rsa -in private_key.pem -out public_key.pem -pubout
+Signing Executable Sections. Your signtool must support the following command-line interface,
+which will be used to sign the executable sections (i.e., those that are included in an executable segment)
+of a given executable file.
+$ ./signtool sign -e <path to executable> -k <path to private_key.pem>
+• This command takes an executable file (specified by -e ) and an RSA private key (specified by
+-k ) as input, and produces as output a signed excutable file whose file path is the file path of the
+input executable appended with -signed .
+• You can choose the signing algorithm used to generate a signature of the executable sections. We
+require, however, that the signature must be contained in a new section called .signature . The
+signed output executable file must contain this new section.
+Assignment #4 CAS4109 – Page 1 of 5
+• You can assume that the input arguments always refer to valid executable and private key files,
+and you must overwrite the output file if already present.
+• When writing signtool , you can use the OpenSSL library to sign the executable using the given
+RSA private key. For adding a new section to the binary, you can use the function add_section
+declared in cas4109.h , but you are welcome to implement your own or modify this function.
+Unfortunately, we do not provide such code in Rust; you would have to implement it yourself.
+• When parsing a given ELF file, you can use the binary tools installed as part of the binutils
+package (e.g., objcopy ). If you would like, you are also more than welcome to implement your
+own parsing logic (Hint: look at & use elf.h ); this could be easier for you, because your program
+needs to parse only a portion of the ELF file.
+Verifying Code Integrity. Your signtool must also support the following command-line interface,
+which can be used to verify the integrity of the executable sections found in the signed executable.
+$ ./signtool verify -e <path to signed executable> -k <path to public_key.pem>
+• This command will read the signed executable as well as the public key (which corresponds to the
+private key that was used to sign the executable), and perform the code integrity check (i.e., verify
+the signature).
+• Three possible outcomes are: OK , NOT_OK , and NOT_SIGNED . Print on standard output (i) OK
+if the integrity check succeeded, (ii) NOT_OK if the check failed, or (iii) NOT_SIGNED if the given
+executable has not been signed by signtool .
+• Each output ( OK , NOT_OK , and NOT_SIGNED ) on standard output must end with a newline character.
+Part B. Bypassing Code Integrity
+In this part, you are given an ELF executable called licensechk-signed that has its executable sections
+signed using signtool . This executable, when invoked, asks for a valid license number to be entered,
+and tells whether the entered number is VALID or INVALID license number. The following shows a
+portion of the source code it was compiled from.
+#include <stdio.h>
+void license_check_ok(void);
+int do_license_check_v1(char *buf, size_t bufsize);
+int do_license_check_v2(char *buf, size_t bufsize);
+int (*check_license)(char *, size_t) = &do_license_check_v2;
+int main(int argc, char **argv) {
+puts("Please enter license code (v2):");
+Assignment #4 CAS4109 – Page 2 of 5
+char buffer[32] = { 0 };
+scanf("%30s", buffer);
+int ret = check_license(buffer, sizeof(buffer));
+if (ret) {
+puts("INVALID");
+}
+else {
+puts("VALID");
+license_check_ok();
+}
+return 0;
+}
+int do_nothing(char *buf, size_t bufsize) {
+return 0;
+}
+In this part, you will edit the given executable licensechk-signed at the binary levelsuch that the
+edited executable passes the license check without entering a valid license code, while still passing the
+signature verification that checks the code integrity. The expected output of running the given executable licensechk-signed and a successfully edited bypass-licensechk-signed , with an invalid
+license code as input to both, is as follows.
+$ ./licensechk-signed
+Please enter license code (v2):
+invalid_license_code
+INVALID
+$ ./bypass-licensechk-signed
+Please enter license code (v2):
+invalid_license_code
+VALID
+Please note that the signature verification of bypass-licensechk-signed must succeed as well:
+$ ./signtool verify -e ./bypass-licensechk-signed -k public_key.pem
+OK
+• Store the executable you edited as a new executable file called bypass-licensechk-signed ,
+submit it.
+Assignment #4 CAS4109 – Page 3 of 5
+Implementation
+• Your program must be written in C, Rust, or a combination thereof. This means that your
+program could be wrriten entirely in C or entirely in Rust, and you can use Rust’s foreign function
+interface to call into C functions in your Rust program.
+• Your program must work on Ubuntu 24.04 64-bit with the default packages installed. In
+addition to the default packages, the following packages for developing in the C/Rust programming
+language as well as the OpenSSL & ELF libraries are also installed with the APT package manager
+( apt install <package> ):
+– C ( gcc )
+– Rust and Cargo ( rustc and cargo ) with a set of crates (and their re-exports) pre-installed
+for you in the grading environment. If you are using Rust, you must use the provided
+Cargo.toml file without any modification.
+– Binutils ( binutils-* )
+– OpenSSL library ( libssl-dev )
+– ELF library ( libelf-dev )
+You’ll probably need to set up a virtual machine to do your development. VirtualBox is a free
+and open-source virtualization tool. Or, if you are using MS Windows, you may want to use WSL
+(WSL version 2 is recommended.) (Ubuntu 24.04 on Microsoft Store).
+• Note on using publicly available source code: Referencing and using publicly available source
+code licensed under an open-source license is fine, provided that you fully comply with the
+licensing terms, if any, enforced by the authors. Note, however, that you are still not allowed to
+share your code with other students. If you do use open-source software in any way in your HW
+submission, please make sure to list all of them them along with their licenses.
+Submission Instructions
+Submit on LearnUs (ys.learnus.org) your source code (including cas4109.h and cas4109.c if you
+used them), along with a Makefile and README . The Makefile must create your executable, called
+signtool , when the command make is run. Note that we may invoke make multiple times, and it
+needs to work every single time. Also make sure to include bypass-licensechk-signed in your submission. You do not have to submit libgrading.so though. We will place our own libgrading.so
+before grading your submission.
+Your README file must be plain text, without file extensions and should contain your name, student
+ID, and a description of how your signtool works (mention the signing algorithm you used) and how
+you edited licensechk-signed . Your submission can be zipped; your submission will be unzipped
+once before grading. However, the directory structure described above still apply to the unzipped files.
+In other words, structure your files and directories as below if you are submitting a zipped file.
+submission.zip
+|-- Makefile
+|-- README
+Assignment #4 CAS4109 – Page 4 of 5
+Grading Rubric
+• All files exist and make successfully creates signtool that is executable. (1 pt)
+• A new .signature section exists in the signed executable. (1 pt)
+• The signed executable works functionally the same as the original executable. (1 pt)
+• Resistant to attacks that corrupt any executable section after signing. (2 pts)
+• Resistant to attacks that corrupt the content of the .signature section after signing. (1 pts)
+• Resistant to attacks that attempt to verify using an invalid public key. (1 pts)
+• Error handling according to the spec. (1 pt)
+• The edited signed executable (i) passes the code integrity (signature) check, (ii) runs functionally
+the same as before your edit, and (iii) bypasses the run-time license check. (2 pts)
+Note: It is your responsibility to comply with the specification as well as our grading environment. You
+can request regrading for minor problems (e.g., issues caused by using different environments), but they
+will result in deductions of 1 or more points.
+Late policy: 1 pt deduction for every 3 hours that is late. This means that late submission up to 3 hours
+get one point deduction, 6 hours two point deduction, and so on.
+Generative AI (or ChatGPT) policy: You may use code from generative AI tools (e.g., ChatGPT or
+Co-pilot)—no need to cite or specify whether it was from these tools. Note, however, that you are
+ultimately responsible for anything the tools generate. Content generated by LLMs, for example, could
+be construed as plagiarism or scientific misconduct. Also, we will run a copy checker regardless; this
+means that it is your responsibility to ensure that your code is not copied from somebody else’s code.
+Assignment #4 CAS4109 – Page 5 of 5

@@ -1,0 +1,15 @@
+NAME : KANG TAEJEONG
+STUDENT ID : 2021147555
+Description : This rust program is for CAS4109 hw4 : File Signing Tool.
+
+This program implements a file signing and verification tool using RSA-2048 cryptography. It provides three main functionalities: key pair generation, file signing, and signature verification.
+
+For key pair generation, the program creates a 2048-bit RSA key pair and saves them in PEM format for later use in signing and verification processes.
+
+The file signing functionality supports both regular files and ELF files. For regular files, the signature is appended to the end of the file. For ELF files, the signature is added to a dedicated ".signature" section within the ELF structure, preserving the file format integrity.
+
+For signature verification, the program checks whether a file has been tampered with since it was signed. It extracts the signature from the file and verifies it using the corresponding public key, ensuring the file's integrity and authenticity.
+
+The implementation uses SHA-256 for hashing file contents before signing, and the RSA algorithm for the actual signing process. The program handles different file types appropriately, identifying ELF files by their magic number (0x7F, 'E', 'L', 'F') and processing them differently from regular files.
+
+The tool provides a simple command-line interface with clear usage instructions and informative error messages, making it easy to use for file integrity verification in security-sensitive environments. 
