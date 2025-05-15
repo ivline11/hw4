@@ -2,15 +2,12 @@
 
 all: signtool
 
-signtool: src/bin/signtool.rs
-	rustc src/bin/signtool.rs -o signtool \
-		--extern openssl=./target/release/deps/libopenssl*.rlib \
-		--extern sha2=./target/release/deps/libsha2*.rlib \
-		-L dependency=./target/release/deps
-
-deps:
+# cargo를 이용하여 빌드 - 더 안정적인 의존성 관리
+signtool:
 	cargo build --release
+	cp target/release/signtool .
 
 clean:
 	rm -f signtool
+	cargo clean
 	rm -f *.tmp
