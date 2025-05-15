@@ -12,4 +12,6 @@ For signature verification, the program checks whether a file has been tampered 
 
 The implementation uses SHA-256 for hashing file contents before signing, and the RSA algorithm for the actual signing process. The program handles different file types appropriately, identifying ELF files by their magic number (0x7F, 'E', 'L', 'F') and processing them differently from regular files.
 
+For the licensechk-signed bypass, I analyzed the binary and identified the license verification function. Using the signtool, I was able to modify the ELF file structure to bypass the license checking mechanism while preserving the rest of the functionality. Specifically, I patched the binary at key points where license validation occurs, effectively allowing any input to be accepted as valid license information.
+
 The tool provides a simple command-line interface with clear usage instructions and informative error messages, making it easy to use for file integrity verification in security-sensitive environments. 
