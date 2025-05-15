@@ -24,4 +24,4 @@ help:
 	@echo "  make          - signtool 바이너리 빌드"
 	@echo "  make deps     - 의존성 라이브러리 빌드"
 	@echo "  make clean    - 빌드 결과물 제거"
-	@echo "  make run      - 프로그램 실행" 
+	@echo "  make run      - 프로그램 실행"
